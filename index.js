@@ -237,6 +237,7 @@ const generateSlackPayload = (text, isWatchdog) => {
 const skipPost = (post, slackMsg) => {
 	const slackPayload = generateSlackPayload(slackMsg);
 	return {
+		id         : post.id.toString(),
 		isFirst    : true,
 		isLast     : true,
 		slack      : slackPayload,
