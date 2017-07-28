@@ -2,6 +2,7 @@
 /*global process:false*/
 const is_saveLocal = false;
 const is_unLike = false;
+const disableSlack = false;
 
 const tumblr = require('tumblr');
 const AWS = require('aws-sdk');
@@ -174,9 +175,12 @@ const setRequestParam = (mediaIdURL) => {
 };
 
 // 画像のフェッチを行い、保存する
-const fetchSaveImages = (photo_urls, callback) => {
+const fetchSaveImages = (photo_urls, savedID, callback) => {
 	photo_urls.forEach((photo) => {
-		// 渡されたURLをForeachし、Fetchパラメーターを付加する
+		if (savedID.indexOf(photo.id) >= 0) {
+			return;
+		}
+		// Fetchパラメーターを付加する
 		photo.requestParam = setRequestParam(photo);
 
 		// パラメータをもとにファイルのFetchと保存
@@ -235,7 +239,9 @@ const fetchFav = () => {
 				return;
 			}
 			let photo_urls = [];
+			let idArr = [];
 			res.liked_posts.forEach((post) => {
+				const id = post.id.toString();
 				if (post.type === 'photo') {
 					const _photos = getPhotoURL(post.photos);
 					const lastIndex = _photos.length - 1;
@@ -243,13 +249,14 @@ const fetchFav = () => {
 					const slackMsg = 'Favした画像だよ。\n' + slackPostURL;
 					const slackPayload = generateSlackPayload(slackMsg);
 					_photos.forEach((photo, index) => photo_urls.push({
-						id         : post.id,
+						id         : id,
 						reblog_key : post.reblog_key,
 						url        : photo,
 						isFirst    : (index === 0) ? true : false,
 						isLast     : (index === lastIndex) ? true : false,
 						slack      : (index === 0) ? slackPayload : null,
 					}));
+					idArr.push(id);
 					return;
 				}
 				if (post.type === 'video') {
@@ -259,25 +266,90 @@ const fetchFav = () => {
 					const slackMsg = 'Favした動画だよ。\n' + post.post_url;
 					const slackPayload = generateSlackPayload(slackMsg);
 					photo_urls.push({
-						id         : post.id,
+						id         : id,
 						reblog_key : post.reblog_key,
 						url        : post.video_url,
 						isFirst    : true,
 						isLast     : true,
 						slack      : slackPayload,
 					});
+					idArr.push(id);
 					return;
 				}
 				return null;
 			});
-			resolve(photo_urls);
+			resolve({photo_urls, idArr});
 		});
 	});
 };
 
+// dynamoDB
+const twId = new class {
+	constructor () {
+		this.TableName = 'twtr_fav';
+		this.dynamodb = new AWS.DynamoDB({
+			region: conf.aws.region
+		});
+	}
+	formatID (idArr) {
+		const idArr_formatted = [];
+		idArr.forEach (id => {
+			idArr_formatted.push ({ S: id.toString() });
+		});
+		return idArr_formatted;
+	}
+	putId (idArr, callback) {
+		const _dbParam = {
+			TableName: this.TableName,
+			Item: {
+				target_id:  {'S': 'tumblr'},
+				posts: {'L': this.formatID(idArr)}
+			}
+		};
+		this.dynamodb.putItem(_dbParam, function(err) {
+			if (err) {
+				callback(err, err.stack);
+			}
+		});
+	}
+	getId (callback) {
+		return new Promise((resolve, reject) => {
+			const _dbParam = {
+				TableName: this.TableName,
+				Key: {
+					target_id: {'S': 'tumblr'}
+				}
+			};
+			this.dynamodb.getItem(_dbParam, (err, data) => {
+				if (err) {
+					reject(err);
+					return;
+				}
+				const item = data.Item;
+				const postList = [];
+				if (item === undefined || item.posts === undefined) {
+					resolve(postList);
+					return;
+				}
+				item.posts.L.forEach(item => {
+					postList.push(item.S);
+				});
+				resolve(postList);
+			});
+		});
+	}
+};
+
 exports.handler = (event, context, callback) => {
-	const imgList = fetchFav();
-	imgList.then((photo_urls) => {
-		fetchSaveImages(photo_urls, callback);
+	const pr_favList = fetchFav();
+	const pr_savedID = twId.getId(callback);
+	Promise.all([pr_favList, pr_savedID]).then((retVal) => {
+		const {photo_urls, idArr} = retVal[0];
+		const savedID = retVal[1];
+		fetchSaveImages(photo_urls, savedID, callback);
+		if (JSON.stringify(savedID) !== JSON.stringify(idArr)) {
+			// 今回fetchしたデータは保存済みとしてID保存
+			twId.putId(idArr, callback);
+		}
 	}).catch(err => callback(err));
 };
