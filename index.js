@@ -1,5 +1,5 @@
 'use strict';
-/*global process:false*/
+/*global process:false Buffer:false*/
 const is_saveLocal = false;
 const is_unLike = false;
 const disableSlack = false;
@@ -14,7 +14,7 @@ const fs = require('fs');
 // get credentials
 const env = process.env;
 const conf = {
-	posts_limit  : env.posts_limit,
+	posts_limit  : env.posts_l1imit,
 	imgSavePath  : 'images/',
 	TumblrAuth   : {
 		consumer_key   : env.tumblr_consumer_key,
@@ -40,7 +40,7 @@ const conf = {
 const user = new tumblr.User(conf.TumblrAuth);
 const unlikePost = (id, reblog_key) => {
 	return new Promise((resolve, reject) => {
-		user.unlike({id, reblog_key}, (err, res) => {
+		user.unlike({id, reblog_key}, (err) => {
 			if (err) {
 				reject(err);
 				return;
@@ -95,13 +95,13 @@ const saveFunc = is_saveLocal ? saveLocal : saveS3;
 
 // 画像の保存を行う
 // fileData : Object {
-	// id          : post id,
-	// reblog_key  : reblog_key,
-	// body        : file body
-	// fileMeta    : meta
-	// isFirst     : sets true if the image is FIRST of photoset
-	// isLast      : sets true if the image is LAST of photoset
-	// slack       : slack payload (if not first image : null)
+// id          : post id,
+// reblog_key  : reblog_key,
+// body        : file body
+// fileMeta    : meta
+// isFirst     : sets true if the image is FIRST of photoset
+// isLast      : sets true if the image is LAST of photoset
+// slack       : slack payload (if not first image : null)
 // }
 const saveImage = (fileData, callback) => {
 	if(!fileData.body) {
@@ -112,7 +112,7 @@ const saveImage = (fileData, callback) => {
 		callback(null, retVal);
 		if (fileData.slack) {
 			postSlack(fileData.slack, callback);
-		};
+		}
 		if (fileData.isLast && is_unLike) {
 			unlikePost(fileData.id, fileData.reblog_key).then(retVal => {
 				callback(null, retVal);
@@ -143,7 +143,7 @@ const setRequestParam = (mediaIdURL) => {
 	if (mediaIdURL.url === undefined) return false;
 	const imgSavePath = conf.imgSavePath;
 	const ext = mediaIdURL.url.match(/\.[a-zA-Z0-9]+$/)[0];
-	const fileName = mediaIdURL.url.match(/.+\/(.+?)([\?#;].*)?$/)[1];
+	const fileName = mediaIdURL.url.match(/.+\/(.+?)([?#;].*)?$/)[1];
 	// content typeを拡張子から判定
 	const contentType = (() => {
 		if (ext === '.jpg') return 'image/jpeg';
@@ -256,7 +256,7 @@ const fetchFav = () => {
 				const id = post.id.toString();
 				idArr.push(id);
 
-				const slackPostURL = (post.post_url + '/').match(/(http|https):\/\/[a-z0-9\-\.]+\/post\/[0-9]+\//)[0];
+				const slackPostURL = (post.post_url + '/').match(/(http|https):\/\/[a-z0-9\-.]+\/post\/[0-9]+\//)[0];
 
 				if (/vine|flickr/.test(post.video_type)) {
 					photo_urls.push(skipPost(post, `${post.video_type}は保存できないよ…\n${slackPostURL}`));
@@ -328,7 +328,7 @@ const twId = new class {
 			}
 		});
 	}
-	getId (callback) {
+	getId () {
 		return new Promise((resolve, reject) => {
 			const _dbParam = {
 				TableName: this.TableName,

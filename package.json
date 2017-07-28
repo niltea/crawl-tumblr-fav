@@ -10,9 +10,16 @@
     "tumblr": "^0.4.1"
   },
   "scripts": {
-    "start": "node start.js"
+    "start": "node start.js",
+    "test": "npm -s run-script lint && npm -s run-script unit",
+    "unit": "istanbul `[ $COVERAGE ] && echo 'cover _mocha' || echo 'test mocha'` -- test test/basic",
+    "lint": "eslint ./*.js --fix",
+    "initLambda": "node ./script/initLambda.js",
+    "build": "node ./script/build.js",
+    "publish": "node ./script/publish.js"
   },
   "devDependencies": {
-    "aws-sdk": "^2.92.0"
+    "aws-sdk": "^2.92.0",
+    "eslint": "^4.3.0"
   }
 }
