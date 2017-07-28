@@ -1,0 +1,12 @@
+{
+  "name": "crawl-tumblr-fav",
+  "version": "1.0.0",
+  "main": "index.js",
+  "author": "niltea <futurabodoni@gmail.com>",
+  "description": "TumblrのLikesを自動で取得して画像を保存するやつ",
+  "repository": "https://github.com/niltea/crawl-tumblr-fav",
+  "license": "MIT",
+  "dependencies": {
+    "tumblr": "^0.4.1"
+  }
+}
