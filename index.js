@@ -183,6 +183,10 @@ const fetchSaveImages = (photo_urls, savedID, callback) => {
 		// Fetchパラメーターを付加する
 		photo.requestParam = setRequestParam(photo);
 
+		if (!photo.url) {
+			postSlack(photo.slack, callback);
+			return;
+		}
 		// パラメータをもとにファイルのFetchと保存
 		fetchImage(photo.requestParam.fetchParam).then(body => {
 			saveImage({
@@ -230,6 +234,14 @@ const generateSlackPayload = (text, isWatchdog) => {
 	return {icon_url, username, channel, text};
 };
 
+const skipPost = (post, slackMsg) => {
+	const slackPayload = generateSlackPayload(slackMsg);
+	return {
+		isFirst    : true,
+		isLast     : true,
+		slack      : slackPayload,
+	};
+};
 const fetchFav = () => {
 	const limit = conf.posts_limit || 20;
 	return new Promise((resolve, reject) => {
@@ -242,10 +254,17 @@ const fetchFav = () => {
 			let idArr = [];
 			res.liked_posts.forEach((post) => {
 				const id = post.id.toString();
+				idArr.push(id);
+
+				const slackPostURL = (post.post_url + '/').match(/(http|https):\/\/[a-z0-9\-\.]+\/post\/[0-9]+\//)[0];
+
+				if (/vine|flickr/.test(post.video_type)) {
+					photo_urls.push(skipPost(post, `${post.video_type}は保存できないよ…\n${slackPostURL}`));
+					return;
+				}
 				if (post.type === 'photo') {
 					const _photos = getPhotoURL(post.photos);
 					const lastIndex = _photos.length - 1;
-					const slackPostURL = (post.post_url + '/').match(/(http|https):\/\/[a-z0-9\-\.]+\/post\/[0-9]+\//)[0];
 					const slackMsg = 'Favした画像だよ。\n' + slackPostURL;
 					const slackPayload = generateSlackPayload(slackMsg);
 					_photos.forEach((photo, index) => photo_urls.push({
@@ -256,14 +275,10 @@ const fetchFav = () => {
 						isLast     : (index === lastIndex) ? true : false,
 						slack      : (index === 0) ? slackPayload : null,
 					}));
-					idArr.push(id);
 					return;
 				}
 				if (post.type === 'video') {
-					if (post.video_type === 'vine') return null;
-					if (post.video_type === 'flickr') return null;
-					const lastIndex = 0;
-					const slackMsg = 'Favした動画だよ。\n' + post.post_url;
+					const slackMsg = 'Favした動画だよ。\n' + slackPostURL;
 					const slackPayload = generateSlackPayload(slackMsg);
 					photo_urls.push({
 						id         : id,
@@ -273,9 +288,10 @@ const fetchFav = () => {
 						isLast     : true,
 						slack      : slackPayload,
 					});
-					idArr.push(id);
 					return;
 				}
+				// 上記のいずれにもあてはまらない場合
+				photo_urls.push(skipPost(post, `${post.type}は保存できないよ…\n${slackPostURL}`));
 				return null;
 			});
 			resolve({photo_urls, idArr});
