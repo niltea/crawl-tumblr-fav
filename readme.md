@@ -12,3 +12,7 @@ Tumblr APIのtoken, token_secret は[こちら](https://api.tumblr.com/console/c
 ## ローカルでのテスト
 `source env.sh` で環境変数をセット。  
 `yarn start` or `node start.js` で走ります。
+
+## おまけ的機能
+unlikeできます  
+ただしtumblrモジュールの修正が必要。
